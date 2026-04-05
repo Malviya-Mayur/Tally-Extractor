@@ -210,7 +210,96 @@ body {
   margin-bottom: 1.5rem;
 }
 
-/* ── Form Groups ─────────────────────────────────────────────────────────── */
+/* ── Form Groups & Modes ─────────────────────────────────────────────────── */
+.mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+  background: var(--bg-raised);
+  padding: 0.35rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  margin-bottom: 0.75rem;
+}
+
+.mode-btn {
+  flex: 1;
+  background: transparent;
+  color: var(--text-sec);
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.mode-btn:hover {
+  color: var(--text-primary);
+}
+
+.mode-btn.active {
+  background: rgba(79, 168, 255, 0.15);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 2.5rem 1rem;
+  text-align: center;
+  position: relative;
+  transition: border-color 0.2s, background 0.2s;
+  background: rgba(28, 34, 48, 0.4);
+  cursor: pointer;
+}
+
+.dropzone:hover,
+.dropzone.dragover {
+  border-color: var(--accent);
+  background: var(--bg-raised);
+}
+
+.dropzone-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.dropzone-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.dropzone-text {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.dropzone-text small {
+  color: var(--text-sec);
+  font-size: 0.75rem;
+  display: block;
+  margin-top: 0.2rem;
+}
+
+.dropzone-selected {
+  z-index: 20;
+  position: relative;
+}
+
 .form-group {
   margin-bottom: 1.4rem;
 }

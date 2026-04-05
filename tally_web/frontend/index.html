@@ -12,6 +12,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet" />
+  <link rel="stylesheet" href="/static/flatpickr.min.css" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 
@@ -43,25 +44,41 @@
 
       <form id="extract-form" novalidate>
 
-        <!-- Date range -->
+        <!-- Source Mode Toggle -->
         <div class="form-group">
+          <label class="form-label">Data Source</label>
+          <div class="mode-toggle" role="group" aria-label="Data source mode">
+            <button type="button" id="mode-live" class="mode-btn active" data-mode="live">
+              <span>🔌</span> Live Tally API
+            </button>
+            <button type="button" id="mode-xml" class="mode-btn" data-mode="xml">
+              <span>📂</span> Upload XML File
+            </button>
+          </div>
+        </div>
+
+        <!-- Date range (live mode only) -->
+        <div class="form-group" id="live-fields">
           <label class="form-label">Date Range</label>
           <div class="date-row">
             <div class="input-wrap">
               <span class="input-label">From</span>
-              <input type="date" id="from-date" name="from_date" class="form-input" required aria-label="Start date" />
+              <input type="text" id="from-date" name="from_date" class="form-input" required aria-label="Start date"
+                placeholder="DD-MM-YYYY" />
             </div>
             <span class="date-arrow">→</span>
             <div class="input-wrap">
               <span class="input-label">To</span>
-              <input type="date" id="to-date" name="to_date" class="form-input" required aria-label="End date" />
+              <input type="text" id="to-date" name="to_date" class="form-input" required aria-label="End date"
+                placeholder="DD-MM-YYYY" />
             </div>
           </div>
           <p class="field-error hidden" id="date-error">⚠ Invalid date range.</p>
         </div>
+        </div><!-- /#live-fields -->
 
-        <!-- Tally Settings -->
-        <div class="form-group">
+        <!-- Tally Connection (live mode only) -->
+        <div class="form-group" id="live-connection">
           <label class="form-label">Tally Connection</label>
           <div class="settings-grid">
             <div class="input-wrap">
@@ -80,6 +97,25 @@
                 aria-label="Timeout in seconds" />
             </div>
           </div>
+        </div>
+        </div><!-- /#live-connection -->
+
+        <!-- XML Upload zone (xml mode only) -->
+        <div class="form-group hidden" id="xml-upload-group">
+          <label class="form-label">XML File</label>
+          <div class="dropzone" id="xml-dropzone">
+            <input type="file" id="xml-file-input" accept=".xml" class="dropzone-input" />
+            <div class="dropzone-inner" id="dropzone-inner">
+              <span class="dropzone-icon">📄</span>
+              <p class="dropzone-text">Drag & drop a Tally XML file here<br /><small>or click to browse</small></p>
+            </div>
+            <div class="dropzone-selected hidden" id="dropzone-selected">
+              <span class="dropzone-icon">✅</span>
+              <p id="dropzone-filename" class="dropzone-text"></p>
+              <button type="button" id="dropzone-clear" class="btn btn-ghost btn-sm">✕ Clear</button>
+            </div>
+          </div>
+          <p class="field-error hidden" id="xml-error">⚠ Please select a valid .xml file.</p>
         </div>
 
         <!-- Output Directory -->
@@ -209,6 +245,7 @@
     </div>
   </dialog>
 
+  <script src="/static/flatpickr.min.js"></script>
   <script src="/static/script.js"></script>
 </body>
 

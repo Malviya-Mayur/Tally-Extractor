@@ -19,13 +19,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import subprocess
+import shutil
 import sys
+import tempfile
+import uuid
 from pathlib import Path
 from typing import Any
 
 import yaml
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -121,17 +123,20 @@ class ExportStarSchema(BaseModel):
 
 
 class ExtractRequest(BaseModel):
-    from_date: str
-    to_date: str
+    from_date: str | None = None  # Required for live mode, not for XML upload mode
+    to_date: str | None = None
     port: int = 9000
     out_dir: str = "./tally_out"
     retries: int = 3
     timeout: int = 60
     export_star_schema: ExportStarSchema = ExportStarSchema()
+    xml_token: str | None = None  # Temp file path returned by /api/upload-xml
 
-    @field_validator("from_date", "to_date")
+    @field_validator("from_date", "to_date", mode="before")
     @classmethod
-    def validate_date(cls, v: str) -> str:
+    def validate_date(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
         v = v.replace("-", "")  # allow YYYY-MM-DD or YYYYMMDD
         if len(v) != 8 or not v.isdigit():
             raise ValueError("Date must be in YYYYMMDD or YYYY-MM-DD format")
@@ -155,6 +160,13 @@ class ConfigUpdate(BaseModel):
 @app.post("/api/extract")
 async def extract(req: ExtractRequest):
     """Start a new extraction job and return its job_id."""
+    # Validate: either xml_token OR (from_date + to_date) must be provided
+    if not req.xml_token and (not req.from_date or not req.to_date):
+        raise HTTPException(
+            status_code=422,
+            detail="Either xml_token (XML upload mode) or from_date + to_date (live mode) is required."
+        )
+
     job_id = jobs.create_job()
     params = {
         "from_date": req.from_date,
@@ -166,9 +178,35 @@ async def extract(req: ExtractRequest):
         "export_dims": req.export_star_schema.dimensions,
         "export_facts": req.export_star_schema.facts,
     }
+    if req.xml_token:
+        params["xml_file"] = req.xml_token
+
     logger.info("Starting extraction job %s | params: %s", job_id, params)
     start_extraction_job(job_id, params)
     return {"job_id": job_id, "message": "Extraction started"}
+
+
+@app.post("/api/upload-xml")
+async def upload_xml(file: UploadFile = File(...)):
+    """
+    Accept a .xml file upload, save it to a temp location, and return
+    an xml_token (the temp file path) that can be passed to /api/extract.
+    """
+    if not file.filename or not file.filename.lower().endswith(".xml"):
+        raise HTTPException(status_code=400, detail="Only .xml files are accepted.")
+
+    tmp_dir = tempfile.mkdtemp(prefix="tally_xml_")
+    token_name = f"upload_{uuid.uuid4().hex}.xml"
+    dest = Path(tmp_dir) / token_name
+
+    try:
+        with dest.open("wb") as f:
+            shutil.copyfileobj(file.file, f)
+    finally:
+        await file.close()
+
+    logger.info("XML upload saved to %s (%d bytes)", dest, dest.stat().st_size)
+    return {"xml_token": str(dest), "filename": file.filename, "size": dest.stat().st_size}
 
 
 @app.get("/api/status/{job_id}")
@@ -239,10 +277,19 @@ async def download(job_id: str, filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Output file missing from disk")
 
+    # Determine MIME type based on extension
+    suffix = file_path.suffix.lower()
+    if suffix == ".xlsx":
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    elif suffix == ".csv":
+        media_type = "text/csv"
+    else:
+        media_type = "application/octet-stream"
+
     return FileResponse(
         path=str(file_path),
         filename=filename,
-        media_type="text/csv",
+        media_type=media_type,
     )
 
 

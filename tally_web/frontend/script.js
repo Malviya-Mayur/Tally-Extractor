@@ -57,12 +57,27 @@ const cfgHostEl = document.getElementById('cfg-host');
 const cfgPortEl = document.getElementById('cfg-port');
 const cfgOutEl = document.getElementById('cfg-out');
 
+const modeLiveBtn = document.getElementById('mode-live');
+const modeXmlBtn = document.getElementById('mode-xml');
+const liveFields = document.getElementById('live-fields');
+const liveConnection = document.getElementById('live-connection');
+const xmlUploadGroup = document.getElementById('xml-upload-group');
+const xmlFileInput = document.getElementById('xml-file-input');
+const xmlDropzone = document.getElementById('xml-dropzone');
+const dropzoneInner = document.getElementById('dropzone-inner');
+const dropzoneSelected = document.getElementById('dropzone-selected');
+const dropzoneFilename = document.getElementById('dropzone-filename');
+const dropzoneClear = document.getElementById('dropzone-clear');
+const xmlError = document.getElementById('xml-error');
+
 // ─────────────────────────────────────────────────────────────────────────────
 // State
 // ─────────────────────────────────────────────────────────────────────────────
 let currentJobId = null;
 let sseSource = null;
 let serverDefaults = {};
+let currentMode = 'live';
+let selectedXmlFile = null;
 
 const LS_KEY = 'tally_pipeline_prefs';
 
@@ -126,11 +141,11 @@ async function fetchServerConfig() {
             // Default date range from config
             if (serverDefaults.default_from) {
                 const df = serverDefaults.default_from;
-                fromDateEl.value = `${df.slice(0, 4)}-${df.slice(4, 6)}-${df.slice(6, 8)}`;
+                fromDateEl.value = `${df.slice(6, 8)}-${df.slice(4, 6)}-${df.slice(0, 4)}`;
             }
             if (serverDefaults.default_to) {
                 const dt = serverDefaults.default_to;
-                toDateEl.value = `${dt.slice(0, 4)}-${dt.slice(4, 6)}-${dt.slice(6, 8)}`;
+                toDateEl.value = `${dt.slice(6, 8)}-${dt.slice(4, 6)}-${dt.slice(0, 4)}`;
             }
         }
     } catch (e) {
@@ -218,8 +233,76 @@ function showDownloads(files) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Mode & XML Upload Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+function setMode(mode) {
+    currentMode = mode;
+    if (mode === 'live') {
+        modeLiveBtn.classList.add('active');
+        modeXmlBtn.classList.remove('active');
+        liveFields.classList.remove('hidden');
+        liveConnection.classList.remove('hidden');
+        xmlUploadGroup.classList.add('hidden');
+    } else {
+        modeXmlBtn.classList.add('active');
+        modeLiveBtn.classList.remove('active');
+        liveFields.classList.add('hidden');
+        liveConnection.classList.add('hidden');
+        xmlUploadGroup.classList.remove('hidden');
+    }
+}
+modeLiveBtn.addEventListener('click', () => setMode('live'));
+modeXmlBtn.addEventListener('click', () => setMode('xml'));
+
+function handleXmlSelect(file) {
+    if (!file || !file.name.toLowerCase().endsWith('.xml')) {
+        xmlError.classList.remove('hidden');
+        selectedXmlFile = null;
+        return;
+    }
+    xmlError.classList.add('hidden');
+    selectedXmlFile = file;
+    dropzoneFilename.textContent = file.name;
+    dropzoneInner.classList.add('hidden');
+    dropzoneSelected.classList.remove('hidden');
+}
+
+function clearXml() {
+    selectedXmlFile = null;
+    xmlFileInput.value = '';
+    dropzoneInner.classList.remove('hidden');
+    dropzoneSelected.classList.add('hidden');
+}
+
+dropzoneClear.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clearXml();
+});
+
+xmlFileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) handleXmlSelect(e.target.files[0]);
+});
+
+xmlDropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    xmlDropzone.classList.add('dragover');
+});
+xmlDropzone.addEventListener('dragleave', () => xmlDropzone.classList.remove('dragover'));
+xmlDropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    xmlDropzone.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) handleXmlSelect(e.dataTransfer.files[0]);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Validation
 // ─────────────────────────────────────────────────────────────────────────────
+function parseDateStr(str) {
+    if (!str || !str.includes('-')) return new Date('');
+    const [d, m, y] = str.split('-');
+    return new Date(y, m - 1, d);
+}
+
 function validateDates() {
     const from = fromDateEl.value;
     const to = toDateEl.value;
@@ -228,7 +311,7 @@ function validateDates() {
         dateError.classList.remove('hidden');
         return false;
     }
-    if (new Date(from) > new Date(to)) {
+    if (parseDateStr(from) > parseDateStr(to)) {
         dateError.textContent = '⚠ Start date must be before or equal to end date.';
         dateError.classList.remove('hidden');
         return false;
@@ -320,7 +403,11 @@ async function pollStatus(jobId) {
 // ─────────────────────────────────────────────────────────────────────────────
 form.addEventListener('submit', async e => {
     e.preventDefault();
-    if (!validateDates()) return;
+    if (currentMode === 'live' && !validateDates()) return;
+    if (currentMode === 'xml' && !selectedXmlFile) {
+        xmlError.classList.remove('hidden');
+        return;
+    }
 
     hideError();
     clearLog();
@@ -339,18 +426,50 @@ form.addEventListener('submit', async e => {
     if (expLedgerEl.checked) exportFacts.push('ledger_entry');
     if (expInventoryEl.checked) exportFacts.push('inventory_line');
 
+    let xmlToken = null;
+    if (currentMode === 'xml') {
+        appendLog('Uploading XML file...');
+        const formData = new FormData();
+        formData.append('file', selectedXmlFile);
+        try {
+            const uploadRes = await fetch('/api/upload-xml', {
+                method: 'POST',
+                body: formData
+            });
+            if (!uploadRes.ok) {
+                const errJson = await uploadRes.json();
+                throw new Error(errJson.detail || 'XML upload failed');
+            }
+            const data = await uploadRes.json();
+            xmlToken = data.xml_token;
+            appendLog('Upload successful: ' + data.filename);
+        } catch (err) {
+            setLoading(false);
+            setStatus('error', 'Failed');
+            showError(err.message);
+            return;
+        }
+    }
+
     const payload = {
-        from_date: fromDateEl.value,
-        to_date: toDateEl.value,
-        port: parseInt(portEl.value, 10) || 9000,
         out_dir: outDirEl.value || './tally_out',
-        retries: parseInt(retriesEl.value, 10) || 3,
-        timeout: parseInt(timeoutEl.value, 10) || 60,
         export_star_schema: {
             dimensions: exportDims,
             facts: exportFacts,
         },
     };
+
+    if (currentMode === 'live') {
+        const fromParts = fromDateEl.value.split('-');
+        const toParts = toDateEl.value.split('-');
+        payload.from_date = `${fromParts[2]}-${fromParts[1]}-${fromParts[0]}`;
+        payload.to_date = `${toParts[2]}-${toParts[1]}-${toParts[0]}`;
+        payload.port = parseInt(portEl.value, 10) || 9000;
+        payload.retries = parseInt(retriesEl.value, 10) || 3;
+        payload.timeout = parseInt(timeoutEl.value, 10) || 60;
+    } else {
+        payload.xml_token = xmlToken;
+    }
 
     try {
         const res = await fetch('/api/extract', {
@@ -473,6 +592,12 @@ settingsModal.addEventListener('click', e => {
 // Init
 // ─────────────────────────────────────────────────────────────────────────────
 (async function init() {
+    // Check if flatpickr is available (loaded locally) and initialize 
+    if (typeof flatpickr !== 'undefined') {
+        flatpickr(fromDateEl, { dateFormat: "d-m-Y", allowInput: true });
+        flatpickr(toDateEl, { dateFormat: "d-m-Y", allowInput: true });
+    }
+
     await fetchServerConfig();
     loadPrefs(); // localStorage overrides server defaults after load
 })();
