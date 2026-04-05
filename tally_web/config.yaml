@@ -1,0 +1,18 @@
+tally:
+  host: localhost
+  port: 9000
+  default_from: "20250401"
+  default_to: "20260331"
+
+output:
+  directory: ./tally_out
+  timestamp: true
+
+server:
+  bind: 127.0.0.1
+  port: 8080
+  auth_enabled: false
+
+pipeline:
+  retries: 3
+  timeout: 60

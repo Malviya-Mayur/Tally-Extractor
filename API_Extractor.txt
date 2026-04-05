@@ -1,0 +1,12 @@
+;; Custom Report Wrapper for Python API Extraction
+;; Forces the inclusion of Dependent Masters and strictly outputs XML
+
+[Report: APIRawVouchers]
+    Use : Voucher Register
+    
+    ;; 1. Force the output format to XML
+    Set : SVExportFormat : $$SysName:XML
+    
+    ;; 2. Explicitly trigger "Include dependent masters: Yes"
+    Set : DBIncludeFamily : Yes
+    Set : EXPDependents   : Yes

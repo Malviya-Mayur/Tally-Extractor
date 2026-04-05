@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tally Pipeline — Web Extractor</title>
+  <meta name="description"
+    content="Browser-based interface for extracting Tally Prime transaction data into CSV files." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────────────────── -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">⚡</span>
+        <div>
+          <h1 class="logo-title">Tally Pipeline</h1>
+          <span class="logo-sub">Web Extractor</span>
+        </div>
+      </div>
+      <div class="header-status" id="header-status">
+        <span class="status-dot idle"></span>
+        <span class="status-label">Idle</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main layout ────────────────────────────────────────────────── -->
+  <main class="app-main">
+
+    <!-- Left panel: form -->
+    <section class="panel form-panel" aria-labelledby="form-heading">
+      <h2 id="form-heading" class="panel-title">Extraction Parameters</h2>
+
+      <form id="extract-form" novalidate>
+
+        <!-- Date range -->
+        <div class="form-group">
+          <label class="form-label">Date Range</label>
+          <div class="date-row">
+            <div class="input-wrap">
+              <span class="input-label">From</span>
+              <input type="date" id="from-date" name="from_date" class="form-input" required aria-label="Start date" />
+            </div>
+            <span class="date-arrow">→</span>
+            <div class="input-wrap">
+              <span class="input-label">To</span>
+              <input type="date" id="to-date" name="to_date" class="form-input" required aria-label="End date" />
+            </div>
+          </div>
+          <p class="field-error hidden" id="date-error">⚠ Invalid date range.</p>
+        </div>
+
+        <!-- Tally Settings -->
+        <div class="form-group">
+          <label class="form-label">Tally Connection</label>
+          <div class="settings-grid">
+            <div class="input-wrap">
+              <span class="input-label">Port</span>
+              <input type="number" id="tally-port" name="port" class="form-input" value="9000" min="1" max="65535"
+                aria-label="Tally HTTP port" />
+            </div>
+            <div class="input-wrap">
+              <span class="input-label">Retries</span>
+              <input type="number" id="retries" name="retries" class="form-input" value="3" min="1" max="10"
+                aria-label="Retry attempts" />
+            </div>
+            <div class="input-wrap">
+              <span class="input-label">Timeout (s)</span>
+              <input type="number" id="timeout" name="timeout" class="form-input" value="60" min="10" max="600"
+                aria-label="Timeout in seconds" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Output Directory -->
+        <div class="form-group">
+          <label class="form-label" for="out-dir">Output Directory</label>
+          <div class="browse-row">
+            <input type="text" id="out-dir" name="out_dir" class="form-input" value="./tally_out"
+              placeholder="./tally_out or /home/user/exports" aria-label="Output directory path" />
+            <button type="button" id="browse-btn" class="btn btn-ghost" title="Browse for folder">
+              <span>📁</span> Browse
+            </button>
+          </div>
+          <p class="field-hint" id="browse-hint"></p>
+        </div>
+
+        <!-- Additional Exports -->
+        <div class="form-group">
+          <label class="form-label">Additional Exports</label>
+          <div class="exports-grid">
+            <label class="checkbox-item">
+              <input type="checkbox" id="exp-dims" name="export_dims" class="cb-input" />
+              <span class="cb-box"></span>
+              <span class="cb-label">Dimension tables<br /><small>dim_ledger, dim_group…</small></span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" id="exp-voucher" name="export_voucher" class="cb-input" />
+              <span class="cb-box"></span>
+              <span class="cb-label">fact_voucher.csv</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" id="exp-ledger" name="export_ledger" class="cb-input" />
+              <span class="cb-box"></span>
+              <span class="cb-label">fact_ledger_entry.csv</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" id="exp-inventory" name="export_inventory" class="cb-input" />
+              <span class="cb-box"></span>
+              <span class="cb-label">fact_inventory_line.csv</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="button-row">
+          <button type="submit" id="start-btn" class="btn btn-primary">
+            <span class="btn-icon">▶</span>
+            <span class="btn-text">Start Extraction</span>
+            <span class="spinner hidden" aria-hidden="true"></span>
+          </button>
+          <button type="button" id="reset-btn" class="btn btn-ghost">
+            Reset
+          </button>
+        </div>
+
+        <!-- Error banner -->
+        <div class="error-banner hidden" id="error-banner" role="alert">
+          <span class="error-icon">❌</span>
+          <div>
+            <strong>Extraction Failed</strong>
+            <p id="error-msg"></p>
+          </div>
+          <button type="button" id="retry-btn" class="btn btn-sm btn-outline">Retry</button>
+        </div>
+
+      </form>
+    </section>
+
+    <!-- Right panel: log + downloads -->
+    <section class="panel log-panel" aria-labelledby="log-heading">
+
+      <!-- Log area -->
+      <div class="log-header">
+        <h2 id="log-heading" class="panel-title">Extraction Log</h2>
+        <button type="button" id="clear-log-btn" class="btn btn-ghost btn-sm">Clear</button>
+      </div>
+      <div class="log-container" id="log-container" role="log" aria-live="polite">
+        <p class="log-placeholder" id="log-placeholder">
+          Log output will appear here after you start an extraction.
+        </p>
+      </div>
+
+      <!-- Downloads -->
+      <div class="downloads-section hidden" id="downloads-section">
+        <div class="downloads-header">
+          <span class="success-badge">✅ Extraction complete!</span>
+        </div>
+        <p class="downloads-label">Download files:</p>
+        <ul class="downloads-list" id="downloads-list"></ul>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- ── Settings modal trigger (bottom bar) ────────────────────────── -->
+  <footer class="app-footer">
+    <button type="button" id="settings-btn" class="btn btn-ghost btn-sm">
+      ⚙ Settings
+    </button>
+    <span class="footer-note">Tally Pipeline Web Interface v1.0 · Localhost only</span>
+  </footer>
+
+  <!-- ── Settings modal ─────────────────────────────────────────────── -->
+  <dialog id="settings-modal" class="settings-modal" aria-labelledby="settings-title">
+    <div class="modal-inner">
+      <div class="modal-header">
+        <h3 id="settings-title">Server Defaults</h3>
+        <button type="button" id="close-modal-btn" class="btn btn-ghost btn-sm" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="cfg-host">Tally Host</label>
+          <input type="text" id="cfg-host" class="form-input" value="localhost" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="cfg-port">Tally Port</label>
+          <input type="number" id="cfg-port" class="form-input" value="9000" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="cfg-out">Default Output Directory</label>
+          <input type="text" id="cfg-out" class="form-input" value="./tally_out" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="save-settings-btn" class="btn btn-primary">Save</button>
+        <button type="button" id="cancel-modal-btn" class="btn btn-ghost">Cancel</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="/static/script.js"></script>
+</body>
+
+</html>
