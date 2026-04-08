@@ -32,9 +32,21 @@ Tally Extractor is a powerful, local web application designed to smoothly extrac
    - Ensure the TDL is loaded without errors.
 
 3. **Install Python Dependencies**
-   Ensure you have Python 3.10+ installed. From the repository root, install the dependencies for the web server:
+   Ensure you have Python 3.10+ installed. It is recommended to create a virtual environment first.
+
+   **For Windows:**
+   ```powershell
+   cd tally_web
+   python -m venv venv
+   venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+
+   **For Linux / macOS:**
    ```bash
    cd tally_web
+   python3 -m venv venv
+   source venv/bin/activate
    pip install -r requirements.txt
    ```
 
@@ -43,11 +55,20 @@ Tally Extractor is a powerful, local web application designed to smoothly extrac
 ## 💻 Usage
 
 1. **Start the Web Application**
-   Run the following command from the `tally_web` directory to launch the server:
+   Depending on your operating system, run the app using the available scripts or commands from the `tally_web` directory:
+
+   **For Windows:**
+   ```powershell
+   # If you are in the active venv
+   python backend\app.py
+   ```
+
+   **For Linux / macOS:**
    ```bash
+   # You can run the provided bash script
    bash start.sh
-   # Alternately on Windows:
-   # python backend/app.py
+   # Or run manually in the active venv:
+   # python3 backend/app.py
    ```
 
 2. **Access the Interface**
@@ -72,7 +93,4 @@ Tally Extractor is a powerful, local web application designed to smoothly extrac
 
 * `Tally_Pipeline.py`: The core python script that handles HTTP requests to Tally and parses the returned XML tree into a flat schema.
 * `APIRawVouchers.tdl`: The Tally Definition Language configuration to expose the required data report.
-* `tally_web/`: The FastApi + HTML/JS web server wrapping the pipeline functionality into a clean user interface.
-
-## License
-MIT License
+* `tally_web/`: The FastAPI + HTML/JS web server wrapping the pipeline functionality into a clean user interface.
