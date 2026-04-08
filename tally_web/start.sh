@@ -26,9 +26,9 @@ if ! python3 -c "import fastapi" &>/dev/null 2>&1; then
   echo "✅ Dependencies installed."
 fi
 
-echo "Starting server at http://127.0.0.1:8080"
-echo "Open your browser and navigate to: http://127.0.0.1:8080"
+echo "Starting server at http://127.0.0.1:8888"
+echo "Open your browser and navigate to: http://127.0.0.1:8888"
 echo "(Press Ctrl+C to stop)"
 echo ""
 
-python3 -m uvicorn backend.app:app --host 127.0.0.1 --port 8080 --reload
+python3 -m uvicorn backend.app:app --host 127.0.0.1 --port 8888 --reload

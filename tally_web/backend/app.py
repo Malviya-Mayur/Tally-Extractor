@@ -366,3 +366,9 @@ async def browse_folder():
             status_code=503,
             detail=f"Folder picker unavailable on this server: {exc}"
         )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    # Change port here if 8888 is already in use
+    uvicorn.run("app:app", host="127.0.0.1", port=8888, reload=True)

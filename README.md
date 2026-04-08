@@ -74,7 +74,7 @@ Tally Extractor is a powerful, local web application designed to smoothly extrac
 2. **Access the Interface**
    Open your browser and navigate to:
    ```
-   http://127.0.0.1:8080/
+   http://127.0.0.1:8888/
    ```
 
 3. **Running an Extraction**
