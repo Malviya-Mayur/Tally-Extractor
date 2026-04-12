@@ -58,7 +58,7 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "tally": {"host": "localhost", "port": 9000, "default_from": "20250401", "default_to": "20260331"},
     "output": {"directory": "./tally_out", "timestamp": True},
     "server": {"bind": "127.0.0.1", "port": 8080, "auth_enabled": False},
-    "pipeline": {"retries": 3, "timeout": 60},
+    "pipeline": {"retries": 3, "timeout": 300, "chunk_months": 1},
 }
 
 
@@ -87,8 +87,8 @@ _config: dict[str, Any] = _load_config()
 # ─────────────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="Tally Pipeline Web Interface",
-    description="Browser-based wrapper for Tally_Pipeline.py",
-    version="1.0.0",
+    description="Browser-based wrapper for Tally_Pipeline_V2.py",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -128,7 +128,8 @@ class ExtractRequest(BaseModel):
     port: int = 9000
     out_dir: str = "./tally_out"
     retries: int = 3
-    timeout: int = 60
+    timeout: int = 300
+    chunk_months: int = 1  # Months per Tally HTTP request (V2 chunked mode)
     export_star_schema: ExportStarSchema = ExportStarSchema()
     xml_token: str | None = None  # Temp file path returned by /api/upload-xml
 
@@ -151,6 +152,7 @@ class ConfigUpdate(BaseModel):
     output_directory: str | None = None
     retries: int | None = None
     timeout: int | None = None
+    chunk_months: int | None = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -175,6 +177,7 @@ async def extract(req: ExtractRequest):
         "out_dir": req.out_dir,
         "retries": req.retries,
         "timeout": req.timeout,
+        "chunk_months": req.chunk_months,
         "export_dims": req.export_star_schema.dimensions,
         "export_facts": req.export_star_schema.facts,
     }
@@ -305,6 +308,7 @@ async def get_config():
         "output_directory": cfg["output"]["directory"],
         "retries": cfg["pipeline"]["retries"],
         "timeout": cfg["pipeline"]["timeout"],
+        "chunk_months": cfg["pipeline"].get("chunk_months", 1),
     }
 
 
@@ -328,6 +332,8 @@ async def update_config(update: ConfigUpdate):
         cfg["pipeline"]["retries"] = update.retries
     if update.timeout is not None:
         cfg["pipeline"]["timeout"] = update.timeout
+    if update.chunk_months is not None:
+        cfg["pipeline"]["chunk_months"] = update.chunk_months
 
     _save_config(cfg)
     _config = cfg

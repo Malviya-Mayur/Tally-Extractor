@@ -93,8 +93,13 @@
             </div>
             <div class="input-wrap">
               <span class="input-label">Timeout (s)</span>
-              <input type="number" id="timeout" name="timeout" class="form-input" value="60" min="10" max="600"
+              <input type="number" id="timeout" name="timeout" class="form-input" value="300" min="10" max="1800"
                 aria-label="Timeout in seconds" />
+            </div>
+            <div class="input-wrap">
+              <span class="input-label">Chunk (months)</span>
+              <input type="number" id="chunk-months" name="chunk_months" class="form-input" value="1" min="1" max="12"
+                aria-label="Months per Tally request" title="Number of months fetched per Tally HTTP request. Increase for faster pulls on small datasets; keep at 1 for large datasets to avoid timeouts." />
             </div>
           </div>
         </div>
@@ -214,7 +219,7 @@
     <button type="button" id="settings-btn" class="btn btn-ghost btn-sm">
       ⚙ Settings
     </button>
-    <span class="footer-note">Tally Pipeline Web Interface v1.0 · Localhost only</span>
+    <span class="footer-note">Tally Pipeline Web Interface v2.0 · Localhost only</span>
   </footer>
 
   <!-- ── Settings modal ─────────────────────────────────────────────── -->

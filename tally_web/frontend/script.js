@@ -21,6 +21,7 @@ const toDateEl = document.getElementById('to-date');
 const portEl = document.getElementById('tally-port');
 const retriesEl = document.getElementById('retries');
 const timeoutEl = document.getElementById('timeout');
+const chunkMonthsEl = document.getElementById('chunk-months');
 const outDirEl = document.getElementById('out-dir');
 const expDimsEl = document.getElementById('exp-dims');
 const expVoucherEl = document.getElementById('exp-voucher');
@@ -91,6 +92,7 @@ function savePrefs() {
         port: portEl.value,
         retries: retriesEl.value,
         timeout: timeoutEl.value,
+        chunk_months: chunkMonthsEl.value,
         out_dir: outDirEl.value,
         exp_dims: expDimsEl.checked,
         exp_voucher: expVoucherEl.checked,
@@ -110,6 +112,7 @@ function loadPrefs() {
         if (p.port) portEl.value = p.port;
         if (p.retries) retriesEl.value = p.retries;
         if (p.timeout) timeoutEl.value = p.timeout;
+        if (p.chunk_months) chunkMonthsEl.value = p.chunk_months;
         if (p.out_dir) outDirEl.value = p.out_dir;
         expDimsEl.checked = !!p.exp_dims;
         expVoucherEl.checked = !!p.exp_voucher;
@@ -136,7 +139,8 @@ async function fetchServerConfig() {
             portEl.value = serverDefaults.tally_port || 9000;
             outDirEl.value = serverDefaults.output_directory || './tally_out';
             retriesEl.value = serverDefaults.retries || 3;
-            timeoutEl.value = serverDefaults.timeout || 60;
+            timeoutEl.value = serverDefaults.timeout || 300;
+            chunkMonthsEl.value = serverDefaults.chunk_months || 1;
 
             // Default date range from config
             if (serverDefaults.default_from) {
@@ -466,7 +470,8 @@ form.addEventListener('submit', async e => {
         payload.to_date = `${toParts[2]}-${toParts[1]}-${toParts[0]}`;
         payload.port = parseInt(portEl.value, 10) || 9000;
         payload.retries = parseInt(retriesEl.value, 10) || 3;
-        payload.timeout = parseInt(timeoutEl.value, 10) || 60;
+        payload.timeout = parseInt(timeoutEl.value, 10) || 300;
+        payload.chunk_months = parseInt(chunkMonthsEl.value, 10) || 1;
     } else {
         payload.xml_token = xmlToken;
     }
@@ -508,7 +513,8 @@ resetBtn.addEventListener('click', () => {
     portEl.value = serverDefaults.tally_port || 9000;
     outDirEl.value = serverDefaults.output_directory || './tally_out';
     retriesEl.value = serverDefaults.retries || 3;
-    timeoutEl.value = serverDefaults.timeout || 60;
+    timeoutEl.value = serverDefaults.timeout || 300;
+    chunkMonthsEl.value = serverDefaults.chunk_months || 1;
     fromDateEl.value = '';
     toDateEl.value = '';
     expDimsEl.checked = expVoucherEl.checked = expLedgerEl.checked = expInventoryEl.checked = false;
