@@ -2,7 +2,7 @@
 
 Tally Extractor is a powerful, local web application designed to smoothly extract and process transactional data from Tally ERP. Operating completely offline, it can interface directly with your active Tally software or parse previously extracted Tally XML files. The resulting data is intelligently flattened into a `.xlsx` file designed for analysis and reporting.
 
-![Tally Pipeline UI UI Screenshot](https://raw.githubusercontent.com/Malviya-Mayur/Tally-Extractor/main/tally_web/frontend/assets/ui_screenshot.png) *(Note: Replace UI screenshot link with actual Github asset link if added)*
+![Tally Pipeline UI UI Screenshot](https://raw.githubusercontent.com/Malviya-Mayur/Tally-Extractor/main/tally_web/frontend/assets/ui_screenshot.png)
 
 ## Features
 
