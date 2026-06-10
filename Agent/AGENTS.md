@@ -1,96 +1,93 @@
-# AGENTS.md — Tally Extractor
+# AGENTS.md — Tally Extractor Developer & Agent Reference
 
-## Project Overview
+This document provides a concise and clear reference for AI agents and developers working on this project. It outlines the codebase layout, pipeline capabilities, execution flows, and integration steps.
 
-**Tally Extractor** is a single-file Python pipeline (`Tally_Pipeline.py`) that fetches accounting data from Tally Prime via its TDL HTTP API, parses the XML response in memory, and exports it as CSV files in a star-schema and flat fact-table format.
+---
 
-## Architecture
+## 1. Project Map & Architecture
 
-The script is organized into 5 sections:
-
-| Section | Purpose |
-|---------|---------|
-| 1 | XML helpers & star-schema parsing |
-| 2 | Tally HTTP API fetch with retry logic |
-| 3 | Flat fact table builder (transaction dump) |
-| 4 | Output filename helpers (company name, date range, timestamp) |
-| 5 | CLI entry point (`main()`) with argparse |
-
-## Key Data Flow
+**Tally Extractor** is an offline-first utility that extracts ledger, voucher, and inventory records from Tally Prime/ERP, processing them into structured Excel (`.xlsx`) and CSV outputs.
 
 ```
-Tally Prime (HTTP/XML) → raw bytes → XML parse → StarSchemaResult → Flat Fact Rows → CSV
+Tally-Extractor/
+├── Agent/                     # Project guidelines, PRDs, and stack specifications
+│   ├── AGENTS.md              # [This File] Main developer and AI agent reference
+│   ├── Product Requirements Document.md
+│   └── Technical Stack for Tally.md
+├── tally_web/                 # FastAPI Web Server + Vanilla Frontend
+│   ├── backend/
+│   │   ├── app.py             # REST API routing (extract, status, logs SSE, config)
+│   │   ├── jobs.py            # Thread-safe in-memory job registry
+│   │   └── pipeline_runner.py # Background thread executor (bridges Web App and V2 Core)
+│   ├── frontend/              # Glassmorphic Dark-Mode UI (HTML, CSS, Vanilla JS)
+│   │   ├── index.html
+│   │   ├── style.css
+│   │   └── script.js
+│   ├── config.yaml            # Server defaults and timeouts configuration
+│   ├── start.sh / start.bat   # Cross-platform application startup scripts
+│   └── requirements.txt       # Python web application dependencies
+├── Tally_Pipeline.py          # Legacy V1 pipeline (In-memory, single fetch)
+└── Tally_Pipeline_V2.py       # Production V2 pipeline (Chunked monthly requests, SQLite buffers)
 ```
 
-### Outputs
+---
 
-- **Transaction dump** (always exported): `{company}_transaction_dump_{period}_{timestamp}.csv` — 77 columns of enriched ledger-level transaction data
-- **Star-schema CSVs** (optional, user-selected): `dim_{name}.csv`, `fact_voucher.csv`, `fact_ledger_entry.csv`, `fact_inventory_line.csv`
+## 2. Core Execution Flows
 
-## Running the Pipeline
+### 2.1. Live Extraction Pipeline (V2)
+1. **Divide Range**: The date range is split into monthly chunks via `_month_chunks()` to keep Tally's XML payloads small and prevent RAM overload.
+2. **Fetch**: Each month is fetched from Tally's local server (default: port `9000`) using `fetch_tally_xml_bytes()` with exponential backoff retries.
+3. **Parse & Index**:
+   - `collect_all_masters()` parses the XML tree in a single pass.
+   - Pre-indexes ledger masters (`opening_balance`, `gstin`, `pan`, `msme_enterprise_category`, `udyam_registration_number`, etc.) and element pointers (`le_elem`, `inv_elem`) to avoid O(N²) parent lookups.
+4. **Buffer to SQLite**: The script inserts the parsed rows directly into a temporary SQLite database on disk (`tally_pipeline_v2.db`) rather than keeping large collections in memory.
+5. **Streaming Export**: `export_db_to_csv()` streams rows from SQLite to a temporary CSV.
+6. **Excel Conversion**: `pipeline_runner.py` uses `openpyxl` to read the temporary CSV and compiles a premium dual-sheet `.xlsx` workbook containing:
+   - Sheet 1: **"Data"** (fully formatted fact rows).
+   - Sheet 2: **"Extraction Log"** (complete session logs).
+7. **Clean up**: Deletes all temporary SQLite and CSV files.
 
-```bash
-# Interactive mode (prompts for dates)
-python Tally_Pipeline.py
+### 2.2. Offline XML Upload Pipeline
+1. The user uploads an XML dump through `POST /api/upload-xml`.
+2. The web server saves it to `/tmp` and issues a token.
+3. Upon triggering extraction, the runner skips the HTTP request steps, loads the file directly, and runs the standard parse-index-buffer-export cycle.
 
-# Non-interactive / batch mode
-python Tally_Pipeline.py --from 20250401 --to 20260331 --out ./out --no-prompt
-```
+---
 
-### CLI Arguments
+## 3. Web Service API Reference
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--from` | (prompted) | Start date YYYYMMDD |
-| `--to` | (prompted) | End date YYYYMMDD |
-| `--port` | 9000 | Tally HTTP port |
-| `--out` | `./tally_out` | Output directory |
-| `--prefix` | `""` | Filename prefix for star-schema CSVs |
-| `--retries` | 3 | Max HTTP retry attempts |
-| `--timeout` | 60 | HTTP timeout in seconds |
-| `--no-prompt` | false | Skip interactive prompts |
+The FastAPI server binds to `127.0.0.1:8888` (or port specified in `config.yaml` / `app.py`).
 
-## Dependencies
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/extract` | Begins background thread extraction. Returns `{job_id, message}`. |
+| `POST` | `/api/upload-xml` | Uploads a local Tally XML file. Returns an `xml_token` (temp filepath). |
+| `GET` | `/api/status/{job_id}`| Returns current status (`pending`, `running`, `completed`, `failed`), output paths, and log lines. |
+| `GET` | `/api/logs/{job_id}` | EventSource connection returning live logs (SSE). |
+| `GET` | `/api/download/{job_id}/{filename}` | Serves the generated spreadsheet. |
+| `GET` | `/api/config` | Retrieves default configurations. |
+| `POST` | `/api/config` | Updates default configurations in `config.yaml`. |
+| `GET` | `/api/browse-folder` | Triggers a server-side native OS directory selection dialog (via tkinter). |
 
-- **stdlib**: `xml.etree.ElementTree`, `csv`, `argparse`, `logging`, `decimal`, `dataclasses`, `datetime`, `calendar`, `re`, `json`, `time`, `pathlib`, `typing`
-- **third-party**: `requests`
+---
 
-## Key Concepts
+## 4. Key Functions to Know
 
-### Star Schema Dimensions
+- **`Tally_Pipeline_V2.py`**:
+  - `fetch_tally_xml_bytes(from_date, to_date, port, max_retries, timeout)`: Connects to Tally HTTP server.
+  - `collect_all_masters(root)`: Gathers currency, group, ledger, stock, godown, unit, and voucher types.
+  - `process_chunk_to_db(root, masters, db_conn)`: Resolves flattening and logs rows into SQLite.
+  - `export_db_to_csv(db_path, csv_path)`: Streams data out to a file.
+- **`tally_web/backend/pipeline_runner.py`**:
+  - `run_extraction(job_id, params)`: Instantiates a thread, captures logs, calls V2 parser functions, builds Excel file.
+- **`tally_web/backend/jobs.py`**:
+  - `append_log(job_id, line)` / `set_status(job_id, status)`: Thread-safe in-memory job operations.
 
-The parser extracts these dimension tables from Tally XML: `CURRENCY`, `GROUP`, `LEDGER`, `STOCKGROUP`, `STOCKITEM`, `UNIT`, `GODOWN`, `VOUCHERTYPE`, `TAXUNIT`, `COMPANY`.
+---
 
-### Voucher Entry Modes
+## 5. Setup & Development Gotchas
 
-The pipeline handles two Tally voucher modes:
-- **Item Invoice** — inventory entries at voucher level with embedded accounting allocations
-- **Standard (As Voucher)** — ledger entries with nested inventory allocations
-
-### Flat Fact Columns (77 total)
-
-The transaction dump enriches each ledger line with: voucher metadata, party ledger info, GST/PAN/MSME details, e-way bill/e-invoice data, inventory details, bill allocations, batch details, and address information.
-
-## Important Functions
-
-| Function | Line | Purpose |
-|----------|------|---------|
-| `fetch_tally_xml_bytes` | ~471 | HTTP POST to Tally with exponential backoff retry |
-| `parse_xml_from_bytes` | ~421 | Decode UTF-16/UTF-8, sanitize, parse XML |
-| `parse_tally_star_schema` | ~380 | Extract dimensions + fact tables from XML |
-| `build_flat_fact_rows` | ~1186 | Enrich ledger lines with master data into flat rows |
-| `export_star_schema` | ~452 | Write dimension/fact CSVs |
-| `export_flat_fact` | ~1366 | Write transaction dump CSV |
-| `main` | ~1435 | CLI entry point orchestrating the full pipeline |
-
-## Logging
-
-Logs are written to both stdout and `tally_pipeline.log` at INFO level.
-
-## Conventions
-
-- No intermediate XML files are written to disk — all processing is in-memory
-- Dates from Tally are in YYYYMMDD format (8-digit strings)
-- Amounts use `Decimal` for precision; Tally uses negative-for-credit convention
-- XML namespace prefixes are stripped via `strip_ns()`
-- List elements (`.LIST` suffix) are handled specially to avoid flattening nested structures
+- **Tally Configuration**: The custom report `APIRawVouchers` must be defined and loaded into Tally Prime. The TDL configuration is located in `API_Extractor.txt`.
+- **Port Mapping**: Tally's port (normally `9000`) must match the value configured in the Web UI.
+- **Python Version**: Recommend Python 3.10+ due to type hint unions (`|`).
+- **Dependencies**: Ensure `openpyxl` (for Excel exporting), `requests` (for Tally queries), and `pyyaml` (for configuration parsing) are installed. Installing `lxml` is optional but highly recommended to accelerate XML parsing by 3-5x.
