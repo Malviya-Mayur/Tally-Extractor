@@ -1,0 +1,69 @@
+name: Build Windows EXE
+
+# Triggers:
+#   - Manually from Actions tab (workflow_dispatch)
+#   - Automatically when a version tag is pushed (e.g. git tag v1.1.0 && git push --tags)
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-exe:
+    name: Build TallyExtractor.exe on Windows
+    runs-on: windows-latest
+
+    steps:
+      # ── 1. Checkout code ────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Set up Python 3.12 ───────────────────────────────────────────────
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ── 3. Install dependencies + PyInstaller ───────────────────────────────
+      - name: Install Python dependencies
+        working-directory: tally_web
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller lxml
+
+      # ── 4. Build the single-file .exe ───────────────────────────────────────
+      - name: Build EXE with PyInstaller
+        working-directory: tally_web
+        run: |
+          pyinstaller tally_extractor.spec --clean --noconfirm
+          echo "Build complete. Listing dist/:"
+          dir dist
+
+      # ── 5. Verify the EXE was produced ──────────────────────────────────────
+      - name: Verify EXE exists
+        working-directory: tally_web
+        run: |
+          if (!(Test-Path "dist\TallyExtractor.exe")) {
+            Write-Error "TallyExtractor.exe not found in dist\!"
+            exit 1
+          }
+          $size = (Get-Item "dist\TallyExtractor.exe").Length / 1MB
+          Write-Host ("TallyExtractor.exe size: {0:N1} MB" -f $size)
+
+      # ── 6. Upload EXE as workflow artifact (always available) ───────────────
+      - name: Upload EXE as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TallyExtractor-Windows-exe
+          path: tally_web/dist/TallyExtractor.exe
+          retention-days: 30
+
+      # ── 7. Attach EXE to GitHub Release (only on tag push) ──────────────────
+      - name: Upload EXE to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.ref_name }} tally_web/dist/TallyExtractor.exe --clobber

@@ -35,6 +35,7 @@ from pydantic import BaseModel, field_validator
 from sse_starlette.sse import EventSourceResponse
 
 from . import jobs
+from ._compat import CONFIG_PATH as _CONFIG_PATH, FRONTEND_DIR as _FRONTEND_DIR
 from .pipeline_runner import start_extraction_job
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 # Config loading
 # ─────────────────────────────────────────────────────────────────────────────
-_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
+# _CONFIG_PATH and _FRONTEND_DIR are imported from _compat (handles PyInstaller bundle paths)
 _DEFAULT_CONFIG: dict[str, Any] = {
     "tally": {"host": "localhost", "port": 9000, "default_from": "20250401", "default_to": "20260331"},
     "output": {"directory": "./tally_out", "timestamp": True},
@@ -100,7 +101,6 @@ app.add_middleware(
 )
 
 # Serve frontend static files
-_FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 if _FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_FRONTEND_DIR)), name="static")
 
